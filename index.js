@@ -1,65 +1,98 @@
+
+const mongoose = require('mongoose');
 const express = require('express');
+const Product = require('./productModel');
 const app = express();
 app.use(express.json());
 
-const PORT  = process.env.PORT || 5000;
-app.use(express.json());
+const MONGODB_URI = "mongodb://localhost:27017/";
+const PORT = 5000;
 
-app.listen(PORT, ()=>{
-    console.log(`App is running on port ${PORT}`)
+mongoose.connect(MONGODB_URI)
+.then(() => {
+    console.log(' Connected to MongoDB');
+
+    app.listen(PORT, () => {
+        console.log(`Server is running on port ${PORT}`);
+    });
 })
-
-const drugs = [
-  { id: 1, name: "Amoxicillin", category: "Antibiotic", dosageMg: 500, isPrescriptionOnly: true, stock: 120, manufacturer: "Pfizer" },
-  { id: 2, name: "Paracetamol", category: "Analgesic", dosageMg: 1000, isPrescriptionOnly: false, stock: 200, manufacturer: "GSK" },
-  { id: 3, name: "Ibuprofen", category: "Analgesic", dosageMg: 400, isPrescriptionOnly: false, stock: 150, manufacturer: "Bayer" },
-  { id: 4, name: "Chloroquine", category: "Antimalarial", dosageMg: 250, isPrescriptionOnly: true, stock: 80, manufacturer: "Sanofi" },
-  { id: 5, name: "Ciprofloxacin", category: "Antibiotic", dosageMg: 500, isPrescriptionOnly: true, stock: 70, manufacturer: "Pfizer" },
-  { id: 6, name: "Loratadine", category: "Antihistamine", dosageMg: 10, isPrescriptionOnly: false, stock: 160, manufacturer: "Novartis" },
-  { id: 7, name: "Metformin", category: "Antidiabetic", dosageMg: 850, isPrescriptionOnly: true, stock: 140, manufacturer: "Teva" },
-  { id: 8, name: "Artemether", category: "Antimalarial", dosageMg: 20, isPrescriptionOnly: true, stock: 60, manufacturer: "Roche" },
-  { id: 9, name: "Aspirin", category: "Analgesic", dosageMg: 200, isPrescriptionOnly: false, stock: 180, manufacturer: "Bayer" },
-  { id: 10, name: "Omeprazole", category: "Antacid", dosageMg: 250, isPrescriptionOnly: true, stock: 50, manufacturer: "AstraZeneca" },
-  { id: 11, name: "Azithromycin", category: "Antibiotic", dosageMg: 500, isPrescriptionOnly: true, stock: 90, manufacturer: "Pfizer" },
-  { id: 12, name: "Cetirizine", category: "Antihistamine", dosageMg: 10, isPrescriptionOnly: false, stock: 110, manufacturer: "Novartis" },
-  { id: 13, name: "Insulin", category: "Antidiabetic", dosageMg: 100, isPrescriptionOnly: true, stock: 30, manufacturer: "Novo Nordisk" },
-  { id: 14, name: "Artemisinin", category: "Antimalarial", dosageMg: 100, isPrescriptionOnly: true, stock: 50, manufacturer: "GSK" },
-  { id: 15, name: "Codeine", category: "Analgesic", dosageMg: 500, isPrescriptionOnly: true, stock: 300, manufacturer: "Nature's Bounty" },
-  { id: 16, name: "Vitamin C", category: "Supplement", dosageMg: 500, isPrescriptionOnly: false, stock: 90, manufacturer: "Sanofi" }
-];
-
-app.get('/drugs/antibiotics', (req, res) => {
-    const anti = drugs.filter(drug=>drug.category == "Antibiotic"); 
-  res.json(anti);
+.catch((error) => {
+    console.error(' Error connecting to MongoDB:', error);
 });
 
-app.get('/names',(req , res)=>{
-    const name = drugs.filter(drug=>drug.category == "Antibiotic")
-    .map(drug=>drug.name.toLowerCase())
-    res.json(name)
+app.get("/all-product", async (req, res) =>{
+    const allProduct = await Product.find()
+
+    res.status(200).json({
+        message: "success",
+        allProduct})
 })
 
-app.get('/drugs/names',(req , res)=>{
-    const manufacturer = drugs.map(drug=>({
-        name: drug.name,
-        manufacturer: drug.manufacturer
-    }));
+app.post("/create-product", async (req, res) =>{
+    const {name, price, quantity} = req.body
 
-    
-    res.json(manufacturer)
-})
-
-
-app.post('/add',(req , res)=>{
-    const {category} = req.body
-    if(!category){
-        return res.json('please enter a category....')
+    if (!name || !price)
+    {
+        return res.status(400).json({
+            message: "please enter all fields"
+        })
     }
-    const newDrug = drugs.filter((drug)=> drug.category === category)
-    res.json(newDrug)
+    const newProduct = new Product ({name, price, quantity})
+
+    await newProduct.save()
+
+    res.status(201).json({
+        message: " success",
+        newProduct
+    })
 
 })
 
+app.put("/update-product/:id", async(req, res)=>{
+    const {id} = req.params
+    const {name, price, quantity} = req.body
+    if(!mongoose.Types.ObjectId.isValid(id)){
+        return  res.status(404).json({message:"invalid Id"})
 
+    }
+    const update = await Product.findByIdAndUpdate(id, {name, price, quantity},
+        {new:true}
 
+    )
+    res.status(201).json({message: "success",
+        update
+    })
 
+})
+
+app.patch ("/update/:id",async (req,res)=>{
+    const {id} = req.params
+    const {name} = req.body
+    if(!mongoose.Types.ObjectId.isValid(id)){
+        return  res.status(404).json({message:"invalid Id"})
+
+    }
+    const updates = await Product.findById(id)
+    if(updates){
+        updates.name= name
+        await updates.save()
+        return    res.status(201).json({message:"success", updates})
+
+    }else{
+        return res.status(201).json({message:"product not found"})
+    }
+   
+})
+app.delete("/delete-product/:id", async (req, res)=>{
+    const {id} = req.params
+
+    if(!mongoose.Types.ObjectId.isValid(id)){
+        return  res.status(404).json({message:"invalid Id"})
+
+    }
+
+    const deleteProduct = await Product.findByIdAndDelete(id)
+
+    return res.status(200).json({message:"product deleted successfully"})
+
+})
